@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -N sbas
+#PBS -j oe
+#PBS -V
+#PBS -m abe
+#PBS -M komodo
+#PBS -l nodes=1:ppn=1#shared
+#PBS -q dque
+
+# go to working dir
+cd $PBS_O_WORKDIR
+
+#load python and gmtsar
+module load GMTSAR/5.4/GMT5.4.1-gnu
+module load python/3.5.3
+module load anaconda/4.4.0-fall3d
+
+#run pre sbas in F? folder
+#code=/home/rino/scripts/insarscripts/los_pad.sh
+#cDir=`pwd`
+#cd ../../
+#$code unwrap.grd
+#unwrap_pad_reg=`grdinfo intf/20*/unwrap_pad.grd -I- | head -1`
+#$code corr.grd $unwrap_pad_reg
+#cd $cDir
+
+#run sbas
+csh sbas.csh intf.in baseline_table.dat
+
+#run post sbas
+sh post_sbas.sh
+

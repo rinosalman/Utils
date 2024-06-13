@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -N mt_prep
+#PBS -j oe
+#PBS -V
+#PBS -m abe
+#PBS -M komodo
+#PBS -l nodes=1:ppn=1#shared
+#PBS -q dque
+
+#load python and gmtsar
+module load GMTSAR/5/gnu
+module load python/3.5.3
+
+Ncpus=`cat $PBS_NODEFILE | wc -l`
+baselinetable=baseline_table.dat_no2009262_2010311
+intflist=intf.in_no2009262_2010311
+datain=data.in_no2009262_2010311
+
+if [ "$PBS_O_WORKDIR" != "" ]; then
+
+   cd $PBS_O_WORKDIR
+   echo Running a job on $Ncpus cpus:
+   echo `cat $PBS_NODEFILE`
+   echo " "
+   echo From directory: $PBS_O_WORKDIR
+   echo " "
+
+   curDir=`pwd`
+   code=$curDir/sbas2stamp/sbas_stamp_prep
+   cd SLC
+   #1. prepare input for generating dispersion values
+   #ls -1 *.PRM > PRM.list
+   #sed -e $'s/:/\\n/g' ../intf.in_no2009262_2010311 > sbas.list
+   region=500/10000/0/27600
+
+   #2 generate amplitude difference dispersion values
+   #$code/dispersion_sbas.sh PRM.list scatter.grd $region sbas.list
+   cd ../sbas2stamp
+
+   #3 link real.grd and imag.grd
+   #$code/link.sh
+
+   #4 crop the real.grd and imag.grd to appropriate size and region
+   #$code/cut.sh $region
+
+   #5 run mt_prep
+   $code/mt_prep_gmtsar_sbas.sh $region $curDir $baselinetable $intflist $code $datain
+
+fi
+

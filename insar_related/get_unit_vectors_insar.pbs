@@ -1,0 +1,21 @@
+#!/bin/bash 
+#PBS -N get_uvsENU
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+source /home/share/insarscripts/isce2-code/isce_env_v2.6.1_MPv1.5.sh
+
+# convert los file to ENU
+los=`ls *5rlks_28alks.los.geo`
+imageMath.py --eval="sin(rad(a_0))*cos(rad(a_1+90));sin(rad(a_0)) * sin(rad(a_1+90));cos(rad(a_0))" --a=$los -t FLOAT -s BIL -o enu.geo
+#isce2gis.py envi -i enu.geo
+
+save_gmt.py enu.geo band1 -o uv_east.grd
+save_gmt.py enu.geo band2 -o uv_north.grd
+save_gmt.py enu.geo band3 -o uv_up.grd

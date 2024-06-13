@@ -1,0 +1,33 @@
+#!/bin/bash 
+#PBS -N unit_vectors
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+source /home/share/insarscripts/isce2-code/isce_env_v2.6.1_MPv1.5.sh
+
+# LOS vector
+# first convert to ENU
+los='220905-230220_5rlks_28alks.los.geo'
+imageMath.py --eval="sin(rad(a_0))*cos(rad(a_1+90));sin(rad(a_0)) * sin(rad(a_1+90));cos(rad(a_0))" --a=$los -t FLOAT -s BIL -o enu.geo
+isce2gis.py envi -i enu.geo
+
+# export each band for east, north, and up
+gdal_translate -of XYZ -b 1 enu.geo east.xyz
+gdal_translate -of XYZ -b 2 enu.geo north.xyz
+gdal_translate -of XYZ -b 3 enu.geo up.xyz
+
+# convert .xyz to .grd
+#gmt xyz2grd east.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Geasttemp.grd
+#gmt xyz2grd north.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Gnorthtemp.grd
+#gmt xyz2grd up.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Guptemp.grd
+
+# masked
+#gmt grdmath easttemp.grd 0 NAN = east.grd
+#gmt grdmath northtemp.grd 0 NAN = north.grd
+#gmt grdmath uptemp.grd 1 NAN = up.grd

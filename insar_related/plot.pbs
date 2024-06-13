@@ -1,0 +1,28 @@
+#!/bin/bash 
+#PBS -N runCommand
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=32
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+### Define number of processors
+NPROCS=`wc -l < $PBS_NODEFILE`
+echo This job has allocated $NPROCS cpus
+
+# load isce
+source /home/share/insarscripts/isce2-code/isce_env_latest.sh
+#source /home/share/insarscripts/isce2-code/isce_env_v2.3.3.sh
+
+# run parallel processing
+cDir=`pwd`
+code=$cDir/plot_intf_iono_correction.py
+#for i in `ls -d intf/20*_20*/insar`;do
+for i in `ls intf/20*/insar/*conncomp.geo`;do
+    fold=`echo $i | awk -F/ '{print $1"/"$2"/"$3}'`
+    cd $fold
+    python $code
+    cd $cDir
+done

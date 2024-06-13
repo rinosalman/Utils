@@ -1,0 +1,16 @@
+#!/bin/bash 
+#PBS -N runCommand
+#PBS -P eos_ehill
+#PBS -q q16
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load mintpy
+source /home/data/INSAR_processing/load_mintpy.sh
+
+# run
+view.py inputs/ifgramStack.h5 unwrapPhase- --save --nodisplay -c polar
+

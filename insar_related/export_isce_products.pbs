@@ -1,0 +1,82 @@
+#!/bin/bash 
+#PBS -N exportISCEproducts
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+module load gmtsar/5.6_gmt5.4.4
+module load ghostscript/9.26
+source /home/data/INSAR_processing/load_mintpy.sh
+source /home/share/insarscripts/isce2-code/isce_env_v2.5.1.sh
+
+
+# start the work
+# geocoded original interferogram
+intOri=`ls diff_*rlks_*alks_ori.int.geo`
+
+#geocoded corrected interferogram
+intt=`ls diff_*rlks_*alks.int.geo`
+
+#geocoded unwrapped phase
+unwGeo=`ls filt_*rlks_*alks.unw.geo`
+
+#run this script only for getting the region and increment
+echo $intOri
+gdal_translate -of GMT -b 1 $intOri temp_grd
+
+#translate wrapped interferograms to .grd
+imageMath.py -e='abs(a); arg(a)' --a=./$intOri -o tmp -t FLOAT -s BIL
+imageMath.py -e='abs(a); arg(a)' --a=./$intt -o tmpp -t FLOAT -s BIL
+gdal_translate -of XYZ -b 2 tmp $intOri".xyz"
+gdal_translate -of XYZ -b 2 tmpp $intt".xyz"
+gmt xyz2grd $intOri".xyz" `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -G$intOri".grd"
+gmt xyz2grd $intt".xyz" `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -G$intt".grd"
+
+#translate unwrapped interferogram to .grd
+gdal_translate -of XYZ -b 2 $unwGeo $unwGeo".xyz"
+gmt xyz2grd $unwGeo".xyz" `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -G$unwGeo".grd"
+gmt grdmath $unwGeo".grd" 0 NAN = $unwGeo"_masked.grd"
+
+# LOS vector
+# first convert to ENU
+los=`ls *.los.geo`
+imageMath.py --eval="sin(rad(a_0))*cos(rad(a_1+90));sin(rad(a_0)) * sin(rad(a_1+90));cos(rad(a_0))" --a=$los -t FLOAT -s BIL -o enu.geo
+isce2gis.py envi -i enu.geo
+
+# export each band for east, north, and up
+gdal_translate -of XYZ -b 1 enu.geo east.xyz
+gdal_translate -of XYZ -b 2 enu.geo north.xyz
+gdal_translate -of XYZ -b 3 enu.geo up.xyz
+
+# convert .xyz to .grd
+gmt xyz2grd east.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Geasttemp.grd
+gmt xyz2grd north.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Gnorthtemp.grd
+gmt xyz2grd up.xyz `gmt grdinfo temp_grd -I-` `gmt grdinfo temp_grd -I` -Guptemp.grd
+
+# masked
+gmt grdmath easttemp.grd 0 NAN = east.grd
+gmt grdmath northtemp.grd 0 NAN = north.grd
+gmt grdmath uptemp.grd 1 NAN = up.grd
+
+# remove unused files
+rm tmp tmpp temp_grd easttemp.grd northtemp.grd uptemp.grd *.xyz
+
+##grdmath east.grd 0 NAN = ${out}_east_6asec.grd
+#grdmath east.grd 0 NAN = masked_east.grd
+#grdsample masked_east.grd -I6c= -G${out}_east_6asec.grd
+#
+#gdal_translate -of GMT -b 2 enu.geo north.grd
+##grdmath north.grd 0 NAN = ${out}_north_6asec.grd
+#grdmath north.grd 0 NAN = masked_north.grd
+#grdsample masked_north.grd -I6c= -G${out}_north_6asec.grd
+#
+##note that above conversion sets "no data" (0 incidence) to 1.0 in up component
+#gdal_translate -of GMT -b 3 enu.geo up.grd
+##grdmath up.grd 1.0 NAN = ${out}_up_6asec.grd
+#grdmath up.grd 1.0 NAN = masked_up.grd
+#grdsample masked_up.grd -I6c= -G${out}_up_6asec.grd

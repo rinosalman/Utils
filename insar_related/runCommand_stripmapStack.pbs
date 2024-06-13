@@ -1,0 +1,44 @@
+#!/bin/bash 
+#PBS -N stripmapStack
+#PBS -P eos_ehill
+#PBS -q q128
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+#source /home/share/insarscripts/isce2-code/isce_env_v2.5.1.sh
+source isce_env_v2.5.1.sh
+
+# download dem
+#mkdir dem
+#cd dem
+#dem.py -a stitch -b 3 6 95 98 -r -s 1 -c
+#rm demLat*.dem demLat*.dem.xml demLat*.dem.vrt
+#fixImageXml.py -i demLat_N03_N06_Lon_E095_E098.dem.wgs84 -f
+
+
+# download data
+#cd data
+#python ssara_federated_query.py --platform=ALOS -r 499 -f80 --download >& $PBS_JOBID.log 2>&1
+#cd ../
+
+# prepare data
+#prepRawALOS.py -i data/ -o slc
+#prepRawSensors.py -i data/ -o slc
+#prepRawALOS.py -i data -o slc --dual2single
+
+# slc generation
+#mv run_unPackALOS unPackALOS.sh
+#sh unPackALOS.sh
+
+# run stackStripMap
+#/home/rino2/scripts/stripmapStack/stackStripMapMod.py -s slc/ -d dem/demLat*.dem.wgs84 -t 750 -b 1000 -a 2 -r 2 -S ALOS -u snaphu -z -m 20080916
+#stackStripMap.py -s slc/ -d dem/demLat*.dem.wgs84 -t 1250 -b 1000 -a 14 -r 4 -S ALOS -u snaphu -z -m 20070730 -W interferogram
+stackStripMap.py -s slc/ -d dem/demLat*.dem.wgs84 -x "4.44 5.3 95.56 96.4" -t 1250 -b 1000 -a 14 -r 28 -S ALOS -u snaphu -m 20081101 -W ionosphere
+
+
+# prep_isce
+#prep_isce.py -d ./Igrams -m ./coregSLC/Coarse/20070127/referenceShelve/data.dat -b ./baselines -g ./geom_reference

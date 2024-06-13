@@ -1,0 +1,31 @@
+#!/bin/bash 
+#PBS -N runCommand
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load mintpy
+source /home/data/INSAR_processing/load_mintpy.sh
+
+# apply gacos correction
+tropo_gacos.py -f timeseries.h5 -g inputs/geometryRadar.h5 --dir ../../../../gacos2/ -o timeseries_GACOS.h5
+
+# reconstruct interferograms
+# timeseries based on GACOS tropospheric corrections
+ifgram_reconstruction.py timeseries_GACOS.h5 -r inputs/ifgramStack.h5 -o ifgramStackRecon.h5
+mv ifgramStackRecon.h5 ifgramStackReconGACOS.h5
+
+# timeseries based on ERA5 tropospheric corrections
+ifgram_reconstruction.py timeseries_ERA5.h5 -r inputs/ifgramStack.h5 -o ifgramStackRecon.h5
+mv ifgramStackRecon.h5 ifgramStackReconERA5.h5
+
+# timeseries without tropospheric corrections
+ifgram_reconstruction.py timeseries.h5 -r inputs/ifgramStack.h5 -o ifgramStackRecon.h5
+
+# calculate std
+rm std_before_after_trop_correction.txt
+python3 /home/rino2/scripts/insarscripts/calc_std_bef_aft_trop.py

@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -N run
+#PBS -P eos_sangho.yun
+#PBS -q q128
+#PBS -l select=1:ncpus=1:mpiprocs=1
+#PBS -l walltime=240:00:00
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+source /home/data/INSAR_processing/indo_sub/s1/isce_env_v2.6.3_MPv1.5.2.topsStack.sh
+
+geom='../../mintpy2/inputs/geometryRadar.h5'
+step=0.000833334
+geocode.py los.rdr -o los.rdr.geo -l $geom --lalo $step $step

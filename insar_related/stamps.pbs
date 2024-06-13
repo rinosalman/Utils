@@ -1,0 +1,31 @@
+#!/bin/bash
+#PBS -N stamps
+#PBS -j oe
+#PBS -V
+#PBS -m abe
+#PBS -M komodo
+#PBS -l nodes=1:ppn=1#shared
+#PBS -q dque
+
+#load python and gmtsar
+module load GMTSAR/5/gnu
+module load python/3.5.3
+
+Ncpus=`cat $PBS_NODEFILE | wc -l`
+
+if [ "$PBS_O_WORKDIR" != "" ]; then
+
+   cd $PBS_O_WORKDIR
+   echo Running a job on $Ncpus cpus:
+   echo `cat $PBS_NODEFILE`
+   echo " "
+   echo From directory: $PBS_O_WORKDIR
+   echo " "
+
+   curDir=`pwd`
+   code=$curDir/sbas2stamp/matlab
+
+   #run code
+   cd sbas2stamp/SMALL_BASELINES/
+   /usr/local/MATLAB/R2013a/bin/matlab -nodesktop -nodisplay -nosplash -r "addpath('$code');stamps(1,8);exit"
+fi

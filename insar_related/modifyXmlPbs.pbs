@@ -1,0 +1,30 @@
+#!/bin/bash
+## Set job parameters
+#PBS -N modifyXmlPbs
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# submit
+code=/home/share/insarscripts/isce2-code/prepapreAlos2App2/modifyXml.py
+cDir=`pwd`
+#for i in `ls -d intf/20*`;do
+#   masterDate=`echo $i | awk '{print substr($1,8,length($1)-16)}'`
+#   slaveDate=`echo $i | awk '{print substr($1,17,length($1)-2)}'`
+#   cd $i
+#   python $code -d -2 3 97 102 -g -1.06 2.7 97.9 101.6 -e 189 235 551 638 462 625 264 638 1 83 1 34 -m $masterDate -s $slaveDate -r 3600
+#   cd $cDir
+#done
+#for i in `grep -v "#" error_phase_estimation_area_not_correct`;do
+#for i in `grep -v "#" error_phase_estimation_area_not_correct2`;do
+for i in `grep -v "#" libXmu_error_pairs_unprocessed`;do
+   masterDate=`echo $i | awk -F_ '{print substr($1,3,length($1))}'`
+   slaveDate=`echo $i | awk -F_ '{print substr($2,3,length($2))}'`
+   cd intf/$i
+   python $code -d -2 3 97 102 -g -1.06 2.7 97.9 101.6 -e 189 235 551 638 462 625 264 638 1 83 1 34 -m $masterDate -s $slaveDate -r 3600
+   cd $cDir
+done

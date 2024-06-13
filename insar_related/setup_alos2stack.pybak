@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+#Prepare input files for stack processing of alos2
+#Rino Salman, 22 April 2020
+
+import isce
+from isceobj.Sensor import createSensor
+import shelve
+import argparse
+import glob
+from isceobj.Util import Poly1D
+from isceobj.Planet.AstronomicalHandbook import Const
+from mroipac.baseline.Baseline import Baseline
+import datetime
+import os
+import numpy as np
+
+def cmdLineParse():
+    '''
+    Command line parser.
+    '''
+
+    parser = argparse.ArgumentParser(description='Prepare input files for stack processing of alos2.')
+    parser.add_argument('-w', '--working_directory', dest='workDir', type=str, default='./',
+            help='Working directory ')
+    parser.add_argument('-i','--input', dest='rawdir', type=str,
+            required=True, help='Input IMG* and LED* ALOS2 directory')
+    parser.add_argument('-t', '--time_threshold', dest='dtThr', type=float, default=10000.0,
+            help='Time threshold (max temporal baseline in days)')
+    parser.add_argument('-b', '--baseline_threshold', dest='dbThr', type=float, default=5000.0,
+            help='Baseline threshold (max bperp in meters)')
+    parser.add_argument('-m', '--master_date', dest='masterDate', type=str, default=None,
+            help='Directory with master acquisition')
+    return parser.parse_args()
+
+
+def unpack(rawdir,slcname):
+    '''
+    Unpack IMG* to binary SLC file.
+    '''
+    print('Unpack IMG* to binary SLC files')
+    img=glob.glob(os.path.join(rawdir, 'IMG*F1'))
+    for ii in range(len(img)):
+        imgname = img[ii]
+        print('Process: %s'%imgname)
+        a,b,c,d,e,f=imgname.split("-")
+        ldrname = rawdir+'/LED-'+c+'-'+d+'-'+e
+        slcdir=slcname+'/20'+d
+    
+        if not os.path.isdir(slcdir):
+           os.makedirs(slcdir)
+
+        date = os.path.basename(slcdir)
+        obj = createSensor('ALOS2')
+        obj.configure()
+        obj._leaderFile = ldrname
+        obj._imageFile = imgname
+
+        obj.output = os.path.join(slcdir, date + '.slc')
+        
+        print(obj._leaderFile)
+        print(obj._imageFile)
+        print(obj.output)
+        obj.extractImage()
+        obj.frame.getImage().renderHdr()
+
+        coeffs = obj.doppler_coeff
+        dr = obj.frame.getInstrument().getRangePixelSize()
+        r0 = obj.frame.getStartingRange()
+
+        poly = Poly1D.Poly1D()
+        poly.initPoly(order=len(coeffs)-1)
+        poly.setCoeffs(coeffs)
+
+        fcoeffs = obj.azfmrate_coeff
+        fpoly = Poly1D.Poly1D()
+        fpoly.initPoly(order=len(fcoeffs)-1)
+        fpoly.setCoeffs(fcoeffs)
+
+        pickName = os.path.join(slcdir, 'data')
+        with shelve.open(pickName) as db:
+           db['frame'] = obj.frame
+           db['doppler'] = poly
+           db['fmrate'] = fpoly
+           db['info'] = obj.leaderFile.facilityRecord.metadata
+
+
+def get_dates(slcOut):
+
+    dirs = glob.glob(slcOut+'/*')
+    acuisitionDates = []
+    for dirf in dirs:
+         expectedRaw = os.path.join(dirf,os.path.basename(dirf) + '.slc')
+
+         if os.path.exists(expectedRaw):
+             acuisitionDates.append(os.path.basename(dirf))
+
+    acuisitionDates.sort()
+    if inps.masterDate is None or inps.masterDate not in acuisitionDates:
+        inps.masterDate = acuisitionDates[0]
+    slaveDates = acuisitionDates.copy()
+    slaveDates.remove(inps.masterDate)
+    return acuisitionDates, inps.masterDate, slaveDates
+
+
+def baselinePair(baselineDir, master, slave,doBaselines=True):
+
+    if doBaselines: # open files to calculate baselines
+        try:
+            mdb = shelve.open( os.path.join(master, 'raw'), flag='r')
+            sdb = shelve.open( os.path.join(slave, 'raw'), flag='r')
+        except:
+            mdb = shelve.open( os.path.join(master, 'data'), flag='r')
+            sdb = shelve.open( os.path.join(slave, 'data'), flag='r')
+
+        mFrame = mdb['frame']
+        sFrame = sdb['frame']
+
+
+        bObj = Baseline()
+        bObj.configure()
+        bObj.wireInputPort(name='masterFrame', object=mFrame)
+        bObj.wireInputPort(name='slaveFrame', object=sFrame)
+        bObj.baseline()    # calculate baseline from orbits
+        pBaselineBottom = bObj.pBaselineBottom
+        pBaselineTop = bObj.pBaselineTop
+    else:       # set baselines to zero if not calculated
+        pBaselineBottom = 0.0
+        pBaselineTop = 0.0
+
+    baselineOutName = os.path.basename(master) + "_" + os.path.basename(slave) + ".txt"
+    f = open(os.path.join(baselineDir, baselineOutName) , 'w')
+    f.write("PERP_BASELINE_BOTTOM " + str(pBaselineBottom) + '\n')
+    f.write("PERP_BASELINE_TOP " + str(pBaselineTop) + '\n')
+    f.close()
+    #print('Baseline at top/bottom: %f %f'%(pBaselineTop,pBaselineBottom))
+    return (pBaselineTop+pBaselineBottom)/2.
+
+
+def baselineStack(inps,stackMaster,acqDates,doBaselines=True):
+    from collections import OrderedDict
+    baselineDir = os.path.join(inps.workDir,'baselines')
+    if not os.path.exists(baselineDir):
+        os.makedirs(baselineDir)
+    baselineDict = OrderedDict()
+    timeDict = OrderedDict()
+    datefmt = '%Y%m%d'
+    t0 = datetime.datetime.strptime(stackMaster, datefmt)
+    master = os.path.join(inps.slcDir, stackMaster)
+    for slv in acqDates:
+        if slv != stackMaster:
+            slave = os.path.join(inps.slcDir, slv)
+            baselineDict[slv]=baselinePair(baselineDir, master, slave, doBaselines)
+            t = datetime.datetime.strptime(slv, datefmt)
+            timeDict[slv] = t - t0
+        else:
+            baselineDict[stackMaster] = 0.0
+            timeDict[stackMaster] = datetime.timedelta(0.0)
+
+    return baselineDict, timeDict
+
+
+def plotNetwork(baselineDict, timeDict, pairs,save_name='pairs.png'):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+    datefmt='%Y%m%d'
+    fig1 = plt.figure(1)
+    ax1=fig1.add_subplot(111)
+
+    ax1.cla()
+    for ni in range(len(pairs)):
+         ax1.plot([datetime.datetime.strptime(pairs[ni][0],datefmt), datetime.datetime.strptime(pairs[ni][1], datefmt)],
+                 np.array([baselineDict[pairs[ni][0]],baselineDict[pairs[ni][1]]]),
+                 '-ko',lw=1, ms=4, alpha=0.7, mfc='r')
+
+
+    myFmt = mdates.DateFormatter('%Y-%m')
+    ax1.xaxis.set_major_formatter(myFmt)
+
+    plt.title('Baseline plot')
+    plt.xlabel('Time')
+    plt.ylabel('Perp. Baseline (m)')
+    plt.tight_layout()
+    plt.savefig(save_name)
+
+    ###Check degree of each SLC
+    datelist = [k for k,v in list(timeDict.items())]
+    connMat = np.zeros((len(pairs), len(timeDict)))
+    for ni in range(len(pairs)):
+        connMat[ni, datelist.index(pairs[ni][0])] = 1.0
+        connMat[ni, datelist.index(pairs[ni][1])] = -1.0
+
+    slcSum = np.sum( np.abs(connMat), axis=0)
+    minDegree = np.min(slcSum)
+
+    print('##################')
+    print('SLCs with min degree connection of {0}'.format(minDegree))
+    for ii in range(slcSum.size):
+        if slcSum[ii] == minDegree:
+            print(datelist[ii])
+    print('##################')
+
+    if np.linalg.matrix_rank(connMat) != (len(timeDict) - 1):
+        raise Exception('The network for cascading coregistration is not connected. Possible reason is due to short time_threshold and baseline threshold')
+
+
+def selectPairs(inps,stackMaster, slaveDates, acuisitionDates,doBaselines=True):
+
+    #plot
+    baselineDict, timeDict = baselineStack(inps, stackMaster, acuisitionDates,doBaselines)
+    #for slave in slaveDates:
+       #print (slave,' : ' , baselineDict[slave])
+    numDates = len(acuisitionDates)
+    pairs = []
+    for i in range(numDates-1):
+       for j in range(i+1,numDates):
+          db = np.abs(baselineDict[acuisitionDates[j]] - baselineDict[acuisitionDates[i]])
+          dt  = np.abs(timeDict[acuisitionDates[j]].days - timeDict[acuisitionDates[i]].days)
+          if (db < inps.dbThr) and (dt < inps.dtThr):
+              pairs.append((acuisitionDates[i],acuisitionDates[j]))
+
+    plotNetwork(baselineDict, timeDict, pairs,os.path.join(inps.workDir,'pairs.ps'))
+    print ('Number of pairs: ', len(pairs))
+
+    # interferogram folders
+    for jj in range(len(pairs)):
+        pairs = np.array(pairs).astype(int)
+        masterslave = pairs[jj]
+        master = masterslave[0]
+        slave = masterslave[1]
+        master_slave = str(master)+'_'+str(slave)
+        intf = os.path.join(inps.workDir, 'intf', master_slave)
+        if not os.path.exists(intf):
+           os.makedirs(intf)
+      
+    #return pairs
+
+    #b=np.array(pairs).astype(int)
+    #a=b[0]
+    #print('%s,%s'%(b[0][0],b[1]))
+
+if __name__ == '__main__':
+    '''
+    Main driver.
+    '''
+
+    # getting the input
+    inps = cmdLineParse()
+    inps.workDir = os.path.abspath(inps.workDir)
+ 
+    # slc output folder
+    slcname = 'slc'
+    slcOut = os.path.join(inps.workDir, slcname)
+    inps.slcDir = slcOut
+    if not os.path.exists(slcOut):
+        os.makedirs(slcOut)
+
+
+    # check input for raw
+    if inps.rawdir.endswith('/'):
+        inps.rawdir = inps.rawdir[:-1]
+
+    # unpack IMG* binary to SLC file
+    dotslc=glob.glob(os.path.join(slcOut, '*/*.slc'))[0]
+    if not os.path.isfile(dotslc):
+        obj = unpack(inps.rawdir, slcname)
+
+    # getting the acquisitions
+    acquisitionDates, stackMasterDate, slaveDates = get_dates(slcOut) 
+ 
+    # create pairs based on time_threshold and baseline_threshold
+    selectPairs(inps,stackMasterDate, slaveDates, acquisitionDates,doBaselines=True)
+
+    # create pairs
+    
+    #print(str(pairs))
+    #b=np.array(pairs).astype(int)
+    #a=b[0]
+    #print('%s,%s'%(b[0][0],b[1]))
+
+
+
+

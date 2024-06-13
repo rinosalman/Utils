@@ -1,0 +1,35 @@
+#bin/bash
+## Set job parameters
+
+## Job Name
+#PBS -N setup_isce
+
+## Project Funding Code 
+#PBS -P eos_ehill
+
+## Queue  Name
+#PBS -q q32
+
+## By default error and output files are in format  <job_name>.e<JOB_ID> and <job_name>.o<JOB_ID>.
+## If you don't want in this format, you can change it as follows 
+##PBS -o my_output.out
+##PBS -e my_error.err
+
+## Specify walltime in HH:MM:SS
+#PBS -l walltime=120:00:00
+
+## Select 1 hosts (nodes) with 32 cores per Host and launch 32 MPI tasks per host
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+#load isce
+module load anaconda2020/python3
+eval "$(/usr/local/anaconda3-2019/bin/conda shell.bash hook)"
+conda activate isce2
+source /home/data/INSAR_processing/isce_conda.sh
+
+# code
+code=/home/rino/scripts/insarscripts/setup_alos2stack.py
+
+# submit
+cd $PBS_O_WORKDIR
+python $code -i raw -e 3 -r 3 8 94 98 -t 370 -b 300 >& $PBS_JOBID.log 2>&1

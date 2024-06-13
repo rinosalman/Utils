@@ -1,0 +1,21 @@
+#!/bin/bash 
+#PBS -N exp
+#PBS -P eos_sangho.yun
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+source /home/share/insarscripts/isce2-code/isce_env_v2.6.1_MPv1.5.sh
+
+# multilook, filter and unwrap interferograms
+sh cmd1.sh
+
+# compute the difference
+python cmd1.py
+
+# unwrap and geocode 
+#sh cmd2.sh

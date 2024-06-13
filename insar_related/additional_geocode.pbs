@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#PBS -N additional_geocode
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+# go to working directory
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load isce
+source /home/share/insarscripts/isce2-code/isce_env_v2.5.1.sh
+
+
+#geocode
+code=/home/rino2/scripts/insarscripts/geo.py
+dem=/home/data/INSAR_processing/sumatra/ALOS2/P040/F3500/isce/secondProcessing/dem3/demLat_N03_N08_Lon_E094_E098.dem.wgs84
+xmlFile=../150224.track.xml
+nrlks=5
+nalks=28
+#cor=$insarpair'_'$nrlks'rlks_'$nalks'alks.cor'
+#unw=filt_$insarpair'_'$nrlks'rlks_'$nalks'alks.unw'
+#mskUnw=filt_$insarpair'_'$nrlks'rlks_'$nalks'alks_msk.unw'
+los=150224_$nrlks'rlks_'$nalks'alks.los'
+
+#execute
+#$code -ref_date_stack_track $xmlFile -dem $dem -input $cor -nrlks $nrlks -nalks $nalks -interp_method nearest -bbox 3.9 5.7 95.2 97.1
+#$code -ref_date_stack_track $xmlFile -dem $dem -input $unw -nrlks $nrlks -nalks $nalks -interp_method nearest -bbox 3.9 5.7 95.2 97.1
+#$code -ref_date_stack_track $xmlFile -dem $dem -input $mskUnw -nrlks $nrlks -nalks $nalks -interp_method nearest -bbox 3.9 5.7 95.2 97.1
+$code -ref_date_stack_track $xmlFile -dem $dem -input $los -nrlks $nrlks -nalks $nalks -interp_method nearest -bbox 3.9 5.7 95.2 97.1

@@ -1,0 +1,23 @@
+#!/bin/bash 
+#PBS -N check_trop
+#PBS -P eos_ehill
+#PBS -q q32
+#PBS -l walltime=120:00:00
+#PBS -l select=1:ncpus=1:mpiprocs=1
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+# load mintpy
+source /home/data/INSAR_processing/load_mintpy.sh
+
+# reconstruct interferograms
+ifgram_reconstruction.py timeseries_GACOS.h5 -r inputs/ifgramStack.h5 -o ifgramStackRecon.h5
+mv ifgramStackRecon.h5 ifgramStackReconGACOS.h5
+
+# timeseries without tropospheric corrections
+ifgram_reconstruction.py timeseries.h5 -r inputs/ifgramStack.h5 -o ifgramStackRecon.h5
+
+# calculate std
+rm std_before_after_GACOS.txt
+python3 /home/rino/scripts/insarscripts/calc_std_before_after_GACOS.py
