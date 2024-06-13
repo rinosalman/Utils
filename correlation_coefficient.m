@@ -25,7 +25,7 @@ for i=1:22
     NmodFilt = []; EmodFilt = []; UmodFilt = [];
     for j=1:numel(yearmdoy)
         for k=1:numel(yearmdoymod)
-            if yearmdoymod(k)==yearmdoy(j)
+            if yearmdoy(j)==yearmdoymod(k)
                 Ntemp=Nmod(k);
                 Etemp=Emod(k);
                 Utemp=Umod(k);
